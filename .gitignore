@@ -4,4 +4,4 @@ target/
 bin/
 *.iml
 .settings/
-/.idea/
+.idea/
