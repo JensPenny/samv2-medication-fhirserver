@@ -1,10 +1,10 @@
-package ca.uhn.example.servlet;
+package be.fhir.penny.servlet;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import ca.uhn.example.provider.OrganizationResourceProvider;
-import ca.uhn.example.provider.PatientResourceProvider;
+import be.fhir.penny.provider.OrganizationResourceProvider;
+import be.fhir.penny.provider.PatientResourceProvider;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.narrative.DefaultThymeleafNarrativeGenerator;
 import ca.uhn.fhir.narrative.INarrativeGenerator;

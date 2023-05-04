@@ -1,7 +1,6 @@
-package ca.uhn.example.interceptor;
+package be.fhir.penny.interceptor;
 
 import ca.uhn.fhir.rest.api.server.RequestDetails;
-import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.interceptor.InterceptorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

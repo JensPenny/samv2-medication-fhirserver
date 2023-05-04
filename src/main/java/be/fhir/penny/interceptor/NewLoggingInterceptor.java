@@ -1,4 +1,4 @@
-package ca.uhn.example.interceptor;
+package be.fhir.penny.interceptor;
 
 import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Pointcut;

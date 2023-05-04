@@ -14,7 +14,7 @@
 		</init-param>
 		<init-param>
 			<param-name>contextConfigLocation</param-name>
-			<param-value>ca.uhn.example.config.FhirTesterConfig</param-value>
+			<param-value>be.fhir.penny.config.FhirTesterConfig</param-value>
 		</init-param>
 		<load-on-startup>2</load-on-startup>
 	</servlet>
@@ -24,7 +24,7 @@
 	-->
 	<servlet>
 		<servlet-name>fhirServlet</servlet-name>
-		<servlet-class>ca.uhn.example.servlet.ExampleRestfulServlet</servlet-class>
+		<servlet-class>be.fhir.penny.servlet.ExampleRestfulServlet</servlet-class>
 		<load-on-startup>1</load-on-startup>
 	</servlet>
 	<servlet-mapping>

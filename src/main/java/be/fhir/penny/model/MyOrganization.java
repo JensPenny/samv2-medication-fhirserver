@@ -1,4 +1,4 @@
-package ca.uhn.example.model;
+package be.fhir.penny.model;
 
 import ca.uhn.fhir.model.api.BaseIdentifiableElement;
 import ca.uhn.fhir.model.api.IElement;

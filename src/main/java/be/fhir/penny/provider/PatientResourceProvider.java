@@ -1,4 +1,4 @@
-package ca.uhn.example.provider;
+package be.fhir.penny.provider;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.DataFormatException;

@@ -1,4 +1,4 @@
-package ca.uhn.example.config;
+package be.fhir.penny.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

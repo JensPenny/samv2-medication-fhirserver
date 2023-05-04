@@ -2,11 +2,11 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>test</groupId>
-	<artifactId>hapi-fhirstarters-rest-server-skeleton</artifactId>
-	<version>5.0.0</version>
+	<artifactId>hapi-rest-medication</artifactId>
+	<version>1.0.0</version>
 	<packaging>war</packaging>
 
-	<name>HAPI FHIR Sample RESTful Server</name>
+	<name>HAPI FHIR server for SAMV2 V5 medication</name>
 
 	<repositories>
 		<repository>
@@ -144,9 +144,9 @@
 		
 		<!-- 
 		Tells Maven to name the generated WAR file as
-		restful-server-example.war
+		hapi-rest-medication.war
 		-->
-		<finalName>restful-server-example</finalName>
+		<finalName>hapi-rest-medication</finalName>
 		
 		<!-- 
 		The following is not required for the application to build, but
