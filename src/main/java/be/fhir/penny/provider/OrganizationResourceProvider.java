@@ -6,10 +6,9 @@ import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
-import org.hl7.fhir.r4.model.BooleanType;
-import org.hl7.fhir.r4.model.CodeType;
-import org.hl7.fhir.r4.model.ContactPoint;
-import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r5.model.*;
+
+import java.util.Collections;
 
 /**
  * This is a simple resource provider which only implements "read/GET" methods, but
@@ -51,17 +50,21 @@ public class OrganizationResourceProvider implements IResourceProvider {
 		MyOrganization retVal = new MyOrganization();
 		retVal.setId("1");
 		retVal.addIdentifier().setSystem("urn:example:orgs").setValue("FooOrganization");
-		retVal.addAddress().addLine("123 Fake Street").setCity("Toronto");
-		retVal.addTelecom().setUse(ContactPoint.ContactPointUse.WORK).setValue("1-888-123-4567");
-		
+		ExtendedContactDetail extendedContactDetail = retVal.addContact();
+		extendedContactDetail.setAddress(new Address().addLine("123 Fake Street").setCity("Toronto"));
+		ContactPoint contact = new ContactPoint()
+				.setUse(ContactPoint.ContactPointUse.WORK)
+				.setValue("1-888-123-4567");
+		extendedContactDetail.setTelecom(Collections.singletonList(contact));
+
 		// Populate the first, primitive extension
 		retVal.setBillingCode(new CodeType("00102-1"));
 		
 		// The second extension is repeatable and takes a block type
-		MyOrganization.EmergencyContact contact = new MyOrganization.EmergencyContact();
-		contact.setActive(new BooleanType(true));
-		contact.setContact(new ContactPoint());
-		retVal.getEmergencyContact().add(contact);
+		MyOrganization.EmergencyContact emergencyContact = new MyOrganization.EmergencyContact();
+		emergencyContact.setActive(new BooleanType(true));
+		emergencyContact.setContact(new ContactPoint());
+		retVal.getEmergencyContact().add(emergencyContact);
 		
 		return retVal;
 	}

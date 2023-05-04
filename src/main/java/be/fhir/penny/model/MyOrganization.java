@@ -3,7 +3,7 @@ package be.fhir.penny.model;
 import ca.uhn.fhir.model.api.annotation.Extension;
 import ca.uhn.fhir.model.api.annotation.*;
 import ca.uhn.fhir.util.ElementUtil;
-import org.hl7.fhir.r4.model.*;
+import org.hl7.fhir.r5.model.*;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -23,7 +23,7 @@ public class ExampleRestfulServlet extends RestfulServer {
 	 * Constructor
 	 */
 	public ExampleRestfulServlet() {
-		super(FhirContext.forR4()); // This is an R4 server
+		super(FhirContext.forR5()); // This is an R5 server
 	}
 	
 	/**
