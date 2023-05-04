@@ -8,9 +8,7 @@ import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
-import org.hl7.fhir.dstu3.model.Enumerations.AdministrativeGender;
-import org.hl7.fhir.dstu3.model.*;
-import org.hl7.fhir.dstu3.model.OperationOutcome.IssueSeverity;
+import org.hl7.fhir.r4.model.*;
 
 import java.util.*;
 
@@ -43,7 +41,7 @@ public class PatientResourceProvider implements IResourceProvider {
       patient.getIdentifier().get(0).setValue("00002");
       patient.addName().setFamily("Test");
       patient.getName().get(0).addGiven("PatientOne");
-      patient.setGender(AdministrativeGender.FEMALE);
+      patient.setGender(Enumerations.AdministrativeGender.FEMALE);
 
       LinkedList<Patient> list = new LinkedList<>();
       list.add(patient);
@@ -115,7 +113,7 @@ public class PatientResourceProvider implements IResourceProvider {
          NAMELOOP:
          for (HumanName nextName : nextPatient.getName()) {
             String nextFamily = nextName.getFamily();
-            if (theFamilyName.equals(nextFamily)) {
+            if (Objects.equals(theFamilyName.getValue(), nextFamily)) {
                retVal.add(nextPatient);
                break NAMELOOP;
             }
@@ -167,7 +165,7 @@ public class PatientResourceProvider implements IResourceProvider {
          throw new ResourceNotFoundException(theId);
       }
 
-      if (theId.hasVersionIdPart() == false) {
+      if (!theId.hasVersionIdPart()) {
          return retVal.getLast();
       } else {
          for (Patient nextVersion : retVal) {
@@ -224,7 +222,7 @@ public class PatientResourceProvider implements IResourceProvider {
        */
       if (thePatient.getNameFirstRep().getFamily().isEmpty()) {
          OperationOutcome outcome = new OperationOutcome();
-         outcome.addIssue().setSeverity(IssueSeverity.FATAL).setDiagnostics("No family name provided, Patient resources must have at least one family name.");
+         outcome.addIssue().setSeverity(OperationOutcome.IssueSeverity.FATAL).setDiagnostics("No family name provided, Patient resources must have at least one family name.");
          throw new UnprocessableEntityException(FhirContext.forDstu3(), outcome);
       }
    }

@@ -1,16 +1,15 @@
 package be.fhir.penny.provider;
 
 import be.fhir.penny.model.MyOrganization;
-import org.hl7.fhir.dstu3.model.BooleanType;
-import org.hl7.fhir.dstu3.model.CodeType;
-import org.hl7.fhir.dstu3.model.ContactPoint;
-import org.hl7.fhir.dstu3.model.ContactPoint.ContactPointUse;
 
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
-import org.hl7.fhir.dstu3.model.IdType;
+import org.hl7.fhir.r4.model.BooleanType;
+import org.hl7.fhir.r4.model.CodeType;
+import org.hl7.fhir.r4.model.ContactPoint;
+import org.hl7.fhir.r4.model.IdType;
 
 /**
  * This is a simple resource provider which only implements "read/GET" methods, but
@@ -53,7 +52,7 @@ public class OrganizationResourceProvider implements IResourceProvider {
 		retVal.setId("1");
 		retVal.addIdentifier().setSystem("urn:example:orgs").setValue("FooOrganization");
 		retVal.addAddress().addLine("123 Fake Street").setCity("Toronto");
-		retVal.addTelecom().setUse(ContactPointUse.WORK).setValue("1-888-123-4567");
+		retVal.addTelecom().setUse(ContactPoint.ContactPointUse.WORK).setValue("1-888-123-4567");
 		
 		// Populate the first, primitive extension
 		retVal.setBillingCode(new CodeType("00102-1"));
