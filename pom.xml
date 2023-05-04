@@ -69,6 +69,13 @@
          <version>${hapifhir_version}</version>
       </dependency>
 
+		<!-- Dependency for access to SQLite -->
+		<dependency>
+			<groupId>org.xerial</groupId>
+			<artifactId>sqlite-jdbc</artifactId>
+			<version>3.41.2.1</version>
+		</dependency>
+
 		<!-- This dependency is used for the "FHIR Tester" web app overlay -->
 		<dependency>
 			<groupId>ca.uhn.hapi.fhir</groupId>
@@ -172,8 +179,8 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.3</version>
 				<configuration>
-					<source>1.8</source>
-					<target>1.8</target>
+					<source>16</source>
+					<target>16</target>
 				</configuration>
 			</plugin>
 			

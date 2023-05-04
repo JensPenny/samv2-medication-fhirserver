@@ -1,8 +1,12 @@
 package be.fhir.penny.servlet;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import be.fhir.penny.db.AmpRepository;
+import be.fhir.penny.db.SQLiteDbProvider;
+import be.fhir.penny.provider.MedicinalProductDefinitionProvider;
 import be.fhir.penny.provider.OrganizationResourceProvider;
 import be.fhir.penny.provider.PatientResourceProvider;
 import ca.uhn.fhir.context.FhirContext;
@@ -32,13 +36,23 @@ public class ExampleRestfulServlet extends RestfulServer {
 	 */
 	@Override
 	public void initialize() {
+
+		//Initialize the DB layer. Error completely if this fails
+		SQLiteDbProvider sqLiteDbProvider = null;
+		try {
+			sqLiteDbProvider = new SQLiteDbProvider();
+		} catch (SQLException e) {
+			throw new RuntimeException("Failed to open DB", e);
+		}
+
 		/*
 		 * Two resource providers are defined. Each one handles a specific
 		 * type of resource.
 		 */
-		List<IResourceProvider> providers = new ArrayList<IResourceProvider>();
+		List<IResourceProvider> providers = new ArrayList<>();
 		providers.add(new PatientResourceProvider());
 		providers.add(new OrganizationResourceProvider());
+		providers.add(new MedicinalProductDefinitionProvider(new AmpRepository(sqLiteDbProvider)));
 		setResourceProviders(providers);
 		
 		/*
