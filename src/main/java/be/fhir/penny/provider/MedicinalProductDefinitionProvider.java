@@ -36,7 +36,7 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
      * The read operation.
      * Takes a single parameter, and returns a single resource
      *
-     * @param samId
+     * @param samId the sam id for the AMP level, plus optionally a version-id
      * @return the resource matching the parameter, or null if it does not exist
      */
     @Read
@@ -73,8 +73,6 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
             def.setId(amp.ampCode());
             MedicinalProductDefinition.MedicinalProductDefinitionNameComponent name = new MedicinalProductDefinition.MedicinalProductDefinitionNameComponent(amp.officialName());
             def.setName(Collections.singletonList(name));
-            //Other names:
-            //MedicinalProduct.MedicinalProductNameComponent officialName = new MedicinalProduct.MedicinalProductNameComponent();
             return def;
         };
     }
