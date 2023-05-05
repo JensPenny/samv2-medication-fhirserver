@@ -41,6 +41,10 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
      */
     @Read
     public Samv2MedicinalProductDefinition readMedicinalProductDefinition(@IdParam IdType samId) {
+        if (!samId.hasVersionIdPart()) {
+            //Return latest
+        }
+        //todo next
 
         throw new ResourceNotFoundException("Unknown medicinal product definition: " + samId.toString());
     }

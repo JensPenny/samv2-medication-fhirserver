@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 /**
+ * todo: log timings
  * Class that will fetch the AMP items from the (SQLite) repository
  */
 public final class AmpRepository {
@@ -24,7 +25,9 @@ public final class AmpRepository {
         Collection<AMP> ampsByName = new ArrayList<>();
         try (Statement statement = provider.getConnection().createStatement()) {
             //todo input sanitation pls
-            ResultSet result = statement.executeQuery("Select * from AMP_FAMHP where officialName like '%" + name + "%'");
+            ResultSet result = statement.executeQuery("Select * from AMP_FAMHP " +
+                    "where officialName like '%" + name + "%' " +      //Check if name contains - needs more info later
+                    "and ifnull(validTo, date('now')) >= date('now')"); //Only valid amps
             while (result.next()) {
                 AMP amp = new AMP(result.getString("code"),
                         result.getString("officialName"));

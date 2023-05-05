@@ -26,8 +26,9 @@ public class SQLiteDbProvider implements DbProvider {
         connection = DriverManager.getConnection("jdbc:sqlite:" + SQLITE_LOCATION, config.toProperties());
     }
 
+    @NotNull
     @Override
     public Connection getConnection() {
-        return null;
+        return connection;
     }
 }

@@ -223,7 +223,7 @@ public class PatientResourceProvider implements IResourceProvider {
       if (thePatient.getNameFirstRep().getFamily().isEmpty()) {
          OperationOutcome outcome = new OperationOutcome();
          outcome.addIssue().setSeverity(OperationOutcome.IssueSeverity.FATAL).setDiagnostics("No family name provided, Patient resources must have at least one family name.");
-         throw new UnprocessableEntityException(FhirContext.forDstu3(), outcome);
+         throw new UnprocessableEntityException(FhirContext.forR5(), outcome);
       }
    }
 
