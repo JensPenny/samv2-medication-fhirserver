@@ -1,0 +1,6 @@
+(review date: 06/05/2023)
+
+I noticed when implementing the different languages that I might need to add a couple of valuesets as well. Even if it's
+just to be able to reference these.
+
+Valuesets I'm thinking of that are no-brainers are for ex. the languages and the countries.

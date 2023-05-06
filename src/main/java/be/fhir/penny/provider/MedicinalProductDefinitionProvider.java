@@ -10,14 +10,12 @@ import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.NotImplementedOperationException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.MedicinalProduct;
 import org.hl7.fhir.r4.model.StringType;
 import org.hl7.fhir.r5.model.*;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -76,14 +74,24 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
         return amp -> {
             Samv2MedicinalProductDefinition def = new Samv2MedicinalProductDefinition();
             def.setId(amp.ampCode());
-            MedicinalProductDefinition.MedicinalProductDefinitionNameComponent name = new MedicinalProductDefinition.MedicinalProductDefinitionNameComponent(amp.officialName());
-            def.setName(Collections.singletonList(name));
+            List<MedicinalProductDefinition.MedicinalProductDefinitionNameComponent> names = new ArrayList<>();
+            MedicinalProductDefinition.MedicinalProductDefinitionNameComponent baseName = new MedicinalProductDefinition.MedicinalProductDefinitionNameComponent(amp.officialName());
+            names.add(baseName);
 
-            //Add the other names if applicable
-            //if (amp.prescriptionNameNl() != null) {
-                //MedicinalProductDefinition.MedicinalProductDefinitionNameComponent prescriptionNl = new MedicinalProductDefinition.MedicinalProductDefinitionNameComponent();
-                //prescriptionNl.a
-            //}
+            if (amp.prescriptionNameNl() != null) {
+                names.add(createName(amp.prescriptionNameNl(), "BE", "nl-BE"));
+            }
+            if (amp.prescriptionNameEng() != null) {
+                names.add(createName(amp.prescriptionNameEng(), "BE", "en"));
+            }
+            if (amp.prescriptionNameFr() != null) {
+                names.add(createName(amp.prescriptionNameFr(), "BE", "fr-BE"));
+            }
+            if (amp.prescriptionNameGer() != null) {
+                names.add(createName(amp.prescriptionNameGer(), "BE", "de-BE"));
+            }
+
+            def.setName(names);
 
             if (amp.blacktriangle()) {
                 def.setAdditionalMonitoringIndicator(new CodeableConcept(new Coding("http://hl7.org/fhir/medicinal-product-additional-monitoring" , "BlackTriangleMonitoring", "Requirement for Black Triangle Monitoring")));
@@ -98,12 +106,14 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
         };
     }
 
+    @SuppressWarnings("SameParameterValue") //For now country is always BE
     private static MedicinalProductDefinition.MedicinalProductDefinitionNameComponent createName(String name, String country, String language) {
         MedicinalProductDefinition.MedicinalProductDefinitionNameComponent component = new MedicinalProductDefinition.MedicinalProductDefinitionNameComponent(name);
 
         if (country != null && language != null) {
             MedicinalProductDefinition.MedicinalProductDefinitionNameUsageComponent usage = new MedicinalProductDefinition.MedicinalProductDefinitionNameUsageComponent();
-            //usage.setCountry()
+            usage.setCountry(new CodeableConcept(new Coding("urn:iso:std:iso:3166", country, country))); //Todo - change as a valueset lookup?
+            usage.setLanguage(new CodeableConcept(new Coding("urn:ietf:bcp:47", language, language)));
             component.addUsage(usage);
         }
 
