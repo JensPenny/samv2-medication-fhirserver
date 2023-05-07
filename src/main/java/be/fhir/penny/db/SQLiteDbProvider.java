@@ -9,7 +9,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class SQLiteDbProvider implements DbProvider {
-    private static final String SQLITE_LOCATION = "/opt/samtosql/6836.db";
+    private static final String SQLITE_LOCATION = "testdb/6836/opt/samtosql/6836.db"; //Links to the testdb folder
 
     /**
      * We use a single sqlite connection, since it's just a file based handle either way.

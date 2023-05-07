@@ -5,3 +5,6 @@ bin/
 *.iml
 .settings/
 .idea/
+
+# fixed sqlite DB packaged for testing as resource
+/testdb/6836/opt/samtosql/
