@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import be.fhir.penny.db.AmpRepository;
+import be.fhir.penny.db.CodeSystemRepository;
 import be.fhir.penny.db.SQLiteDbProvider;
+import be.fhir.penny.provider.CodeSystemProvider;
 import be.fhir.penny.provider.MedicinalProductDefinitionProvider;
 import be.fhir.penny.provider.OrganizationResourceProvider;
 import be.fhir.penny.provider.PatientResourceProvider;
@@ -15,6 +17,7 @@ import ca.uhn.fhir.narrative.INarrativeGenerator;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.interceptor.ResponseHighlighterInterceptor;
+import org.sqlite.SQLiteOpenMode;
 
 /**
  * This servlet is the actual FHIR server itself
@@ -27,22 +30,31 @@ public class ExampleRestfulServlet extends RestfulServer {
 	 * Constructor
 	 */
 	public ExampleRestfulServlet() {
-		super(FhirContext.forR5()); // This is an R5 server
+		super(FHIRConfig.context); // This is an R5 server
 	}
 	
 	/**
 	 * This method is called automatically when the
 	 * servlet is initializing.
 	 */
+	private static final String SAMV2_SQLITE_LOCATION = "testdb/6836/opt/samtosql/6836.db"; //Links to the testdb folder
+	private static final String FHIR_SQLITE_LOCATION = "testdb/fhir_r5.db"; //Links to the testdb folder
 	@Override
 	public void initialize() {
 
 		//Initialize the DB layer. Error completely if this fails
-		SQLiteDbProvider sqLiteDbProvider = null;
+		SQLiteDbProvider samv2SqliteProvider = null; //SQLite connection to the samv2 database
 		try {
-			sqLiteDbProvider = new SQLiteDbProvider();
+			samv2SqliteProvider = new SQLiteDbProvider(SAMV2_SQLITE_LOCATION, SQLiteOpenMode.READONLY);
 		} catch (SQLException e) {
-			throw new RuntimeException("Failed to open DB", e);
+			throw new RuntimeException("Failed to open DB" + SAMV2_SQLITE_LOCATION, e);
+		}
+
+		SQLiteDbProvider fhirSqliteProvider = null;  //SQLite connection to the db that will provide the rest of the FHIR concepts
+		try {
+			fhirSqliteProvider = new SQLiteDbProvider(FHIR_SQLITE_LOCATION, SQLiteOpenMode.READWRITE);
+		} catch (SQLException e) {
+			throw new RuntimeException("Failed to open DB" + FHIR_SQLITE_LOCATION, e);
 		}
 
 		/*
@@ -52,7 +64,8 @@ public class ExampleRestfulServlet extends RestfulServer {
 		List<IResourceProvider> providers = new ArrayList<>();
 		providers.add(new PatientResourceProvider());
 		providers.add(new OrganizationResourceProvider());
-		providers.add(new MedicinalProductDefinitionProvider(new AmpRepository(sqLiteDbProvider)));
+		providers.add(new MedicinalProductDefinitionProvider(new AmpRepository(samv2SqliteProvider)));
+		providers.add(new CodeSystemProvider(new CodeSystemRepository(fhirSqliteProvider)));
 		setResourceProviders(providers);
 		
 		/*
