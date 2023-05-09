@@ -9,7 +9,6 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class SQLiteDbProvider implements DbProvider {
-    private static final String SQLITE_LOCATION = "testdb/6836/opt/samtosql/6836.db"; //Links to the testdb folder
 
     /**
      * We use a single sqlite connection, since it's just a file based handle either way.
@@ -17,13 +16,14 @@ public class SQLiteDbProvider implements DbProvider {
     @NotNull
     private final Connection connection;
 
-    public SQLiteDbProvider() throws SQLException {
+    public SQLiteDbProvider(String sqliteFile,
+                            SQLiteOpenMode mode) throws SQLException {
         SQLiteConfig config = new SQLiteConfig();
-        config.setReadOnly(true);
+        config.setReadOnly(mode == SQLiteOpenMode.READONLY);
         config.setSharedCache(true);
         config.setBusyTimeout(30*1000);
-        config.setOpenMode(SQLiteOpenMode.READONLY);
-        connection = DriverManager.getConnection("jdbc:sqlite:" + SQLITE_LOCATION, config.toProperties());
+        config.setOpenMode(mode);
+        connection = DriverManager.getConnection("jdbc:sqlite:" + sqliteFile, config.toProperties());
     }
 
     @NotNull
