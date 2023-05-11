@@ -1,11 +1,14 @@
 package be.fhir.penny.provider;
 
 import be.fhir.penny.db.CodeSystemRepository;
+import be.fhir.penny.terminology.FileBackedFileDescriptor;
+import be.fhir.penny.terminology.FileDescriptor;
 import be.fhir.penny.servlet.FHIRConfig;
+import be.fhir.penny.servlet.UploadStatistics;
+import be.fhir.penny.terminology.LoadedFileDescriptors;
 import ca.uhn.fhir.context.BaseRuntimeChildDefinition;
 import ca.uhn.fhir.context.BaseRuntimeElementCompositeDefinition;
 import ca.uhn.fhir.context.BaseRuntimeElementDefinition;
-import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.i18n.Msg;
 import ca.uhn.fhir.rest.annotation.*;
 import ca.uhn.fhir.rest.api.MethodOutcome;
@@ -15,6 +18,8 @@ import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.NotImplementedOperationException;
+import ca.uhn.fhir.util.ParametersUtil;
+import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.instance.model.api.*;
 import org.hl7.fhir.r5.model.CodeSystem;
 import org.hl7.fhir.r5.model.IdType;
@@ -23,14 +28,16 @@ import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static be.fhir.penny.terminology.FileDescriptor.LOINC_URI;
+import static be.fhir.penny.terminology.LoincUploadPropertiesEnum.*;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.apache.commons.lang3.StringUtils.trim;
 
@@ -97,17 +104,135 @@ public class CodeSystemProvider implements IResourceProvider {
             throw new InvalidRequestException(Msg.code(1138) + ": No files found for external code upload of url " + boxedCodeSystem.getValue());
         }
 
-        LOGGER.info("starting conversion of file descriptors for upload");
-        List<FileDescriptor> localFiles = convertCompositeToFiles(files);
+        try {
+            LOGGER.info("starting conversion of file descriptors for upload");
+            List<FileDescriptor> localFiles = convertCompositeToFiles(files);
 
-        LOGGER.info("found {} file descriptors: {}", localFiles.size(), localFiles.stream().map(Object::toString).collect(Collectors.joining(",")));
+            LOGGER.info("found {} file descriptors: {}", localFiles.size(), localFiles.stream().map(Object::toString).collect(Collectors.joining(",")));
 
-        String codeSystemUrl = boxedCodeSystem.getValue();
-        codeSystemUrl = trim(codeSystemUrl);
+            String codeSystemUrl = boxedCodeSystem.getValue();
+            codeSystemUrl = trim(codeSystemUrl);
+
+            UploadStatistics stats;
+            LOGGER.info("starting export for {}", codeSystemUrl);
+            switch (codeSystemUrl) {
+                case LOINC_URI:
+                    stats = loadLoinc(localFiles, request);
+                    break;
+                /*
+            case ICD10_URI:
+                stats = myTerminologyLoaderSvc.loadIcd10(localFiles, theRequestDetails);
+                break;
+            case ICD10CM_URI:
+                stats = myTerminologyLoaderSvc.loadIcd10cm(localFiles, theRequestDetails);
+                break;
+            case IMGTHLA_URI:
+                stats = myTerminologyLoaderSvc.loadImgthla(localFiles, theRequestDetails);
+                break;
+            case SCT_URI:
+                stats = myTerminologyLoaderSvc.loadSnomedCt(localFiles, theRequestDetails);
+                break;
+                 */
+                default:
+                    //stats = myTerminologyLoaderSvc.loadCustom(codeSystemUrl, localFiles, theRequestDetails);
+                    throw new NotImplementedOperationException("CodeSystem export not implemented for " + codeSystemUrl);
+            }
+
+            IBaseParameters retVal = ParametersUtil.newInstance(FHIRConfig.context);
+            ParametersUtil.addParameterToParametersBoolean(FHIRConfig.context, retVal, "success", true);
+            ParametersUtil.addParameterToParametersInteger(FHIRConfig.context, retVal, "conceptCount", stats.getUpdatedConceptCount());
+            ParametersUtil.addParameterToParametersReference(FHIRConfig.context, retVal, "target", stats.getTarget().getValue());
+
+            return retVal;
+        } finally {
+            //todo - end request
+        }
+    }
+
+    private UploadStatistics loadLoinc(List<FileDescriptor> files,
+                                       HttpServletRequest request) {
+        LoadedFileDescriptors loadedFileDescriptors = new LoadedFileDescriptors(files);
+        try (loadedFileDescriptors) {
+            Properties uploadProperties = getProperties(loadedFileDescriptors, LOINC_UPLOAD_PROPERTIES_FILE.getCode());
+            //Verified working to this part 2023-05-09
+            String codeSystemVersionId = uploadProperties.getProperty(LOINC_CODESYSTEM_VERSION.getCode());
+
+
+            boolean isMakeCurrentVersion = Boolean.parseBoolean(
+                    uploadProperties.getProperty(LOINC_CODESYSTEM_MAKE_CURRENT.getCode(), "true"));
+
+            if (StringUtils.isBlank(codeSystemVersionId) && ! isMakeCurrentVersion) {
+                throw new InvalidRequestException(Msg.code(864) + "'" + LOINC_CODESYSTEM_VERSION.getCode() +
+                        "' property is required when '" + LOINC_CODESYSTEM_MAKE_CURRENT.getCode() + "' property is 'false'");
+            }
+
+            List<String> mandatoryFilenameFragments = Arrays.asList(
+                    uploadProperties.getProperty(LOINC_ANSWERLIST_FILE.getCode(), LOINC_ANSWERLIST_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_ANSWERLIST_LINK_FILE.getCode(), LOINC_ANSWERLIST_LINK_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_DOCUMENT_ONTOLOGY_FILE.getCode(), LOINC_DOCUMENT_ONTOLOGY_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_FILE.getCode(), LOINC_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_HIERARCHY_FILE.getCode(), LOINC_HIERARCHY_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_IEEE_MEDICAL_DEVICE_CODE_MAPPING_TABLE_FILE.getCode(), LOINC_IEEE_MEDICAL_DEVICE_CODE_MAPPING_TABLE_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_IMAGING_DOCUMENT_CODES_FILE.getCode(), LOINC_IMAGING_DOCUMENT_CODES_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_PART_FILE.getCode(), LOINC_PART_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_PART_RELATED_CODE_MAPPING_FILE.getCode(), LOINC_PART_RELATED_CODE_MAPPING_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_RSNA_PLAYBOOK_FILE.getCode(), LOINC_RSNA_PLAYBOOK_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_UNIVERSAL_LAB_ORDER_VALUESET_FILE.getCode(), LOINC_UNIVERSAL_LAB_ORDER_VALUESET_FILE_DEFAULT.getCode())
+            );
+            loadedFileDescriptors.verifyMandatoryFilesExist(mandatoryFilenameFragments);
+
+            LOGGER.info("verified mandatory files");
+
+            List<String> splitPartLinkFilenameFragments = Arrays.asList(
+                    uploadProperties.getProperty(LOINC_PART_LINK_FILE_PRIMARY.getCode(), LOINC_PART_LINK_FILE_PRIMARY_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_PART_LINK_FILE_SUPPLEMENTARY.getCode(), LOINC_PART_LINK_FILE_SUPPLEMENTARY_DEFAULT.getCode())
+            );
+            loadedFileDescriptors.verifyPartLinkFilesExist(splitPartLinkFilenameFragments, uploadProperties.getProperty(LOINC_PART_LINK_FILE.getCode(), LOINC_PART_LINK_FILE_DEFAULT.getCode()));
+
+            List<String> optionalFilenameFragments = Arrays.asList(
+                    uploadProperties.getProperty(LOINC_GROUP_FILE.getCode(), LOINC_GROUP_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_GROUP_TERMS_FILE.getCode(), LOINC_GROUP_TERMS_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_PARENT_GROUP_FILE.getCode(), LOINC_PARENT_GROUP_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_TOP2000_COMMON_LAB_RESULTS_SI_FILE.getCode(), LOINC_TOP2000_COMMON_LAB_RESULTS_SI_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_TOP2000_COMMON_LAB_RESULTS_US_FILE.getCode(), LOINC_TOP2000_COMMON_LAB_RESULTS_US_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_MAPTO_FILE.getCode(), LOINC_MAPTO_FILE_DEFAULT.getCode()),
+
+                    //-- optional consumer name
+                    uploadProperties.getProperty(LOINC_CONSUMER_NAME_FILE.getCode(), LOINC_CONSUMER_NAME_FILE_DEFAULT.getCode()),
+                    uploadProperties.getProperty(LOINC_LINGUISTIC_VARIANTS_FILE.getCode(), LOINC_LINGUISTIC_VARIANTS_FILE_DEFAULT.getCode())
+
+            );
+            loadedFileDescriptors.verifyOptionalFilesExist(optionalFilenameFragments);
+
+            LOGGER.info("Beginning LOINC processing");
+
+        }
 
         return null;
     }
 
+    Properties getProperties(LoadedFileDescriptors theDescriptors, String thePropertiesFile) {
+        Properties retVal = new Properties();
+
+        try (InputStream propertyStream = CodeSystemProvider.class.getResourceAsStream("/term/loincupload.properties")) {
+            retVal.load(propertyStream);
+        } catch (IOException e) {
+            throw new InternalErrorException(Msg.code(866) + "Failed to process loinc.properties", e);
+        }
+
+        for (FileDescriptor next : theDescriptors.getUncompressedFileDescriptors()) {
+            if (next.getFilename().endsWith(thePropertiesFile)) {
+                try {
+                    try (InputStream inputStream = next.getInputStream()) {
+                        retVal.load(inputStream);
+                    }
+                } catch (IOException e) {
+                    throw new InternalErrorException(Msg.code(867) + "Failed to read " + thePropertiesFile, e);
+                }
+            }
+        }
+        return retVal;
+    }
 
     //Based on the JPA code that has support for this. Backported for a custom server
     // https://github.com/hapifhir/hapi-fhir/blob/648d14c52cd3a4c79ad5a2562e16ec437aed1439/hapi-fhir-jpaserver-base/src/main/java/ca/uhn/fhir/jpa/provider/TerminologyUploaderProvider.java#L404
@@ -151,7 +276,7 @@ public class CodeSystemProvider implements IResourceProvider {
                     throw new NotImplementedOperationException("external file creation by uri not supported at this moment");
                     //nextData = AttachmentUtil.getOrCreateData(getContext(), next).getValue();
                     //ValidateUtil.isTrueOrThrowInvalidRequest(nextData != null && nextData.length > 0, "Missing Attachment.data value");
-                    //files.add(new ITermLoaderSvc.ByteArrayFileDescriptor(nextUrl, nextData));
+                    //files.add(new ByteArrayFileDescriptor(nextUrl, nextData));
                 }
             }
         }
@@ -160,45 +285,4 @@ public class CodeSystemProvider implements IResourceProvider {
     }
     //@Operation(name = "\\$lookup", idempotent = true)
 
-    private interface FileDescriptor {
-        String IMGTHLA_URI = "http://www.ebi.ac.uk/ipd/imgt/hla";
-        String LOINC_URI = "http://loinc.org";
-        String SCT_URI = "http://snomed.info/sct";
-        String ICD10_URI = "http://hl7.org/fhir/sid/icd-10";
-        String ICD10CM_URI = "http://hl7.org/fhir/sid/icd-10-cm";
-        String IEEE_11073_10101_URI = "urn:iso:std:iso:11073:10101";
-
-        String getFilename();
-
-        InputStream getInputStream();
-    }
-
-    public static class FileBackedFileDescriptor implements FileDescriptor {
-        private final File myNextFile;
-
-        public FileBackedFileDescriptor(File theNextFile) {
-            myNextFile = theNextFile;
-        }
-
-        @Override
-        public String getFilename() {
-            return myNextFile.getAbsolutePath();
-        }
-
-        @Override
-        public InputStream getInputStream() {
-            try {
-                return new FileInputStream(myNextFile);
-            } catch (FileNotFoundException theE) {
-                throw new InternalErrorException(Msg.code(1142) + theE);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "FileBackedFileDescriptor{" +
-                    "myNextFile=" + myNextFile +
-                    '}';
-        }
-    }
 }
