@@ -19,21 +19,22 @@ import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.NotImplementedOperationException;
 import ca.uhn.fhir.util.ParametersUtil;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.csv.QuoteMode;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.instance.model.api.*;
 import org.hl7.fhir.r5.model.CodeSystem;
+import org.hl7.fhir.r5.model.ConceptMap;
 import org.hl7.fhir.r5.model.IdType;
+import org.hl7.fhir.r5.model.ValueSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.io.*;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static be.fhir.penny.terminology.FileDescriptor.LOINC_URI;
@@ -41,6 +42,7 @@ import static be.fhir.penny.terminology.LoincUploadPropertiesEnum.*;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.apache.commons.lang3.StringUtils.trim;
 
+//todo split and sort methods. Zip and csv parsers should be their own packages
 public class CodeSystemProvider implements IResourceProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CodeSystemProvider.class);
@@ -205,9 +207,15 @@ public class CodeSystemProvider implements IResourceProvider {
             loadedFileDescriptors.verifyOptionalFilesExist(optionalFilenameFragments);
 
             LOGGER.info("Beginning LOINC processing");
-
+            if (isMakeCurrentVersion) {
+                return processLoincFiles(loadedFileDescriptors, request, uploadProperties);
+            } else {
+                throw new NotImplementedOperationException("only implemented a make-current version of the loinc uploads");
+            }
         }
+    }
 
+    private UploadStatistics processLoincFiles(LoadedFileDescriptors loadedFileDescriptors, HttpServletRequest request, Properties uploadProperties) {
         return null;
     }
 
