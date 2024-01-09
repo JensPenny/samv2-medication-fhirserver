@@ -1,5 +1,6 @@
 package be.fhir.penny.provider;
 
+import be.fhir.penny.servlet.FHIRConfig;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.DataFormatException;
 import ca.uhn.fhir.rest.annotation.*;
@@ -223,7 +224,7 @@ public class PatientResourceProvider implements IResourceProvider {
       if (thePatient.getNameFirstRep().getFamily().isEmpty()) {
          OperationOutcome outcome = new OperationOutcome();
          outcome.addIssue().setSeverity(OperationOutcome.IssueSeverity.FATAL).setDiagnostics("No family name provided, Patient resources must have at least one family name.");
-         throw new UnprocessableEntityException(FhirContext.forR5(), outcome);
+         throw new UnprocessableEntityException(FHIRConfig.context, outcome);
       }
    }
 
