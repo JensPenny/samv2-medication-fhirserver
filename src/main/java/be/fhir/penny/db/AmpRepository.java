@@ -27,7 +27,7 @@ public final class AmpRepository {
             "select amp_route.ampCode from AMPC_TO_ROA amp_route " +
                     "JOIN STDROA roa on roa.standard = 'SNOMED_CT' and roa.roaCode = amp_route.roaCode" +
                     "where amp_route.ampCode = ? and amp_route.validTo is null",    //? = amp-code
-            "select * from CMRCL comm where comm.ctiExtended = ? and ifnull(comm.validTo, date('now')) >= date('now')"
+            "select * from CMRCL comm where comm.ctiExtended = ? and ifnull(comm.validTo, date('now')) >= date('now')",
             "select * from SPPROB sp where sp.ctiExtended = ? and ifnull(sp.validTo, date('now')) >= date('now')"
     );
 
