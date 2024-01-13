@@ -2,13 +2,11 @@ package be.fhir.penny.db;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * todo: log timings
@@ -19,17 +17,33 @@ public final class AmpRepository {
     @NotNull
     private final DbProvider provider;
 
+    //A selection of basic statements needed to fill a Medicinal Product Definition
+    private final List<String> ampcodeStatements = Arrays.asList(
+            "select * from AMP_FAMHP ampf where ampf.validTo is null and ampf.code = ?",        //? = amp-code
+            "select * from AMPP_FAMHP amppf where amppf.ampCode = ? and amppf.validTo is null", //? = amp-code
+            "select ampp_atc.ctiExtended, ATC.* from AMPP_TO_ATC ampp_atc " +
+                    "JOIN ATC on ATC.code = ampp_atc.code where ampp_atc.ctiExtended = ? and ampp_atc.validTo is null", //? = cti-extended
+            "select * from AMPC_BCPI ampcb where ampcb.ampCode = ? and ampcb.validTo is null",     //? = amp-code
+            "select amp_route.ampCode from AMPC_TO_ROA amp_route " +
+                    "JOIN STDROA roa on roa.standard = 'SNOMED_CT' and roa.roaCode = amp_route.roaCode" +
+                    "where amp_route.ampCode = ? and amp_route.validTo is null",    //? = amp-code
+            "select * from CMRCL comm where comm.ctiExtended = ? and ifnull(comm.validTo, date('now')) >= date('now')"
+            "select * from SPPROB sp where sp.ctiExtended = ? and ifnull(sp.validTo, date('now')) >= date('now')"
+    );
+
+    //Specialized queries to fetch the initial data required for the top calls
+    private static final String ampByName = "Select * from AMP_FAMHP where officialName like ? and ifnull(validTo, date('now')) >= date('now')";
+
     public AmpRepository(@NotNull final DbProvider provider) {
         this.provider = provider;
     }
 
     public Collection<AMP_FAHMP> getAmpsByName(@NotNull final String name) {
         Collection<AMP_FAHMP> ampsByName = new ArrayList<>();
-        try (Statement statement = provider.getConnection().createStatement()) {
+        try (PreparedStatement statement = provider.getConnection().prepareStatement(ampByName)) {
             //todo input sanitation pls
-            ResultSet result = statement.executeQuery("Select * from AMP_FAMHP " +
-                    "where officialName like '%" + name + "%' " +      //Check if name contains - needs more info later
-                    "and ifnull(validTo, date('now')) >= date('now')"); //Only valid amps
+            statement.setString(0, name);
+            ResultSet result = statement.executeQuery();
             while (result.next()) {
                 AMP_FAHMP amp = ampFromResult(result);
                 ampsByName.add(amp);
@@ -37,7 +51,6 @@ public final class AmpRepository {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-
         return ampsByName;
     }
 
