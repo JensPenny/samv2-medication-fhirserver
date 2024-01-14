@@ -24,7 +24,7 @@ public final class AmpRepository {
             "select ampp_atc.ctiExtended, ATC.* from AMPP_TO_ATC ampp_atc " +
                     "JOIN ATC on ATC.code = ampp_atc.code where ampp_atc.ctiExtended = ? and ampp_atc.validTo is null", //? = cti-extended
             "select * from AMPC_BCPI ampcb where ampcb.ampCode = ? and ampcb.validTo is null",     //? = amp-code
-            "select amp_route.ampCode from AMPC_TO_ROA amp_route " +
+            "select amp_route.ampCode, roa.* from AMPC_TO_ROA amp_route " +
                     "JOIN STDROA roa on roa.standard = 'SNOMED_CT' and roa.roaCode = amp_route.roaCode" +
                     "where amp_route.ampCode = ? and amp_route.validTo is null",    //? = amp-code
             "select * from CMRCL comm where comm.ctiExtended = ? and ifnull(comm.validTo, date('now')) >= date('now')",
@@ -54,9 +54,27 @@ public final class AmpRepository {
         return ampsByName;
     }
 
+    public Optional<AMP_FAHMP> getCurrentAmpById(@NotNull final String ampCode) {
+        try (Statement statement = provider.getConnection().createStatement()) {
+            //todo input sanitation pls
+            ResultSet result = statement.executeQuery("Select * from AMP_FAMHP " +
+                    "where code = '" + ampCode + "' " +
+                    "and ifnull(validTo, date('now')) >= date('now')"); //Only valid amps
+            while (result.next()) {
+                AMP_FAHMP amp = ampFromResult(result);
+                return Optional.of(amp);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+        return Optional.empty();
+    }
+
     @NotNull
     private static AMP_FAHMP ampFromResult(ResultSet result) throws SQLException {
         return new AMP_FAHMP(
+                result.getInt("id"),
                 result.getString("code"),
                 result.getString("officialName"),
                 result.getBoolean("blackTriangle"),
@@ -77,40 +95,203 @@ public final class AmpRepository {
         );
     }
 
-    public Optional<AMP_FAHMP> getCurrentAmpById(@NotNull final String ampCode) {
-        try (Statement statement = provider.getConnection().createStatement()) {
-            //todo input sanitation pls
-            ResultSet result = statement.executeQuery("Select * from AMP_FAMHP " +
-                    "where code = '" + ampCode + "' " +
-                    "and ifnull(validTo, date('now')) >= date('now')"); //Only valid amps
-            while (result.next()) {
-                AMP_FAHMP amp = ampFromResult(result);
-                return Optional.of(amp);
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-
-        return Optional.empty();
+    @NotNull
+    private static AMPP_FAMHP amppFromResult(ResultSet result) throws SQLException {
+        return new AMPP_FAMHP(
+                result.getInt("id"),
+                result.getString("ctiExtended"),
+                result.getString("ampCode"),
+                result.getString("deliveryModusCode"),
+                result.getString("deliveryModusSpecificationCode"),
+                result.getString("authorizationNumber"),
+                result.getBoolean("orphan"),
+                result.getString("leafletLinkNl"),
+                result.getString("leafletLinkFr"),
+                result.getString("leafletLinkEng"),
+                result.getString("leafletLinkGer"),
+                result.getString("spcLinkNl"),
+                result.getString("spcLinkFr"),
+                result.getString("spcLinkEng"),
+                result.getString("spcLinkGer"),
+                result.getString("rmaPatientLinkNl"),
+                result.getString("rmaPatientLinkFr"),
+                result.getString("rmaPatientLinkEng"),
+                result.getString("rmaPatientLinkGer"),
+                result.getString("rmaProfessionalLinkNl"),
+                result.getString("rmaProfessionalLinkFr"),
+                result.getString("rmaProfessionalLinkEng"),
+                result.getString("rmaProfessionalLinkGer"),
+                result.getBoolean("parallelCircuit"),
+                result.getString("parallelDistributor"),
+                result.getString("packMultiplier"),
+                result.getString("packAmount"),
+                result.getString("packAmountUnit"),
+                result.getString("packDisplayValue"),
+                result.getString("gtin"),
+                result.getString("status"),
+                result.getString("fmdProductCode"),
+                result.getBoolean("fmdInScope"),
+                result.getBoolean("antiTamperingDevicePresent"),
+                result.getString("prescriptionNameNl"),
+                result.getString("prescriptionNameFr"),
+                result.getString("prescriptionNameGer"),
+                result.getString("prescriptionNameEng"),
+                result.getString("rmaKeyMessagesNl"),
+                result.getString("rmaKeyMessagesFr"),
+                result.getString("rmaKeyMessagesEng"),
+                result.getString("rmaKeyMessagesGer"),
+                result.getDate("validFrom"),
+                result.getDate("validTo")
+        );
     }
 
-    public record AMP_FAHMP(String ampCode,
-                            String officialName,
-                            boolean blacktriangle,
-                            Integer companyActorNumber,
-                            String medicineType,
-                            String nameEng,
-                            String nameFr,
-                            String nameGer,
-                            String nameNl,
-                            String prescriptionNameEng,
-                            String prescriptionNameFr,
-                            String prescriptionNameGer,
-                            String prescriptionNameNl,
-                            String status,
-                            Date validFrom,
-                            Date validTo,
-                            Integer vmpCode
-                      ) {
+    @NotNull
+    private static AMPP_TO_ATC atcFromResult(ResultSet result) throws SQLException {
+        return new AMPP_TO_ATC(
+                result.getString("ctiExtended"),
+                result.getInt("id"),
+                result.getString("code"),
+                result.getString("description")
+        );
     }
+
+    @NotNull
+    private static AMPC_BCPI ampcFromResult(ResultSet result) throws SQLException {
+        return new AMPC_BCPI(
+                result.getInt("id"),
+                result.getString("ampCode"),
+                result.getInt("sequenceNumber"),
+                result.getInt("vmpcCode"),
+                result.getString("dividable"),
+                result.getString("scored"),
+                result.getString("crushable"),
+                result.getString("containsAlcohol"),
+                result.getBoolean("sugarFree"),
+                result.getString("modifiedReleaseType"),
+                result.getInt("specificDrugDevice"),
+                result.getString("dimensions"),
+                result.getString("nameNl"),
+                result.getString("nameFr"),
+                result.getString("nameEng"),
+                result.getString("nameGer"),
+                result.getString("noteNl"),
+                result.getString("noteFr"),
+                result.getString("noteEng"),
+                result.getString("noteGer"),
+                result.getString("concentration"),
+                result.getString("osmoticConcentration"),
+                result.getString("caloricValue"),
+                result.getDate("validFrom"),
+                result.getDate("validTo")
+        );
+    }
+
+    public record AMP_FAHMP(
+            int id,
+            String ampCode,
+            String officialName,
+            boolean blacktriangle,
+            Integer companyActorNumber,
+            String medicineType,
+            String nameEng,
+            String nameFr,
+            String nameGer,
+            String nameNl,
+            String prescriptionNameEng,
+            String prescriptionNameFr,
+            String prescriptionNameGer,
+            String prescriptionNameNl,
+            String status,
+            Date validFrom,
+            Date validTo,
+            Integer vmpCode
+    ) {
+    }
+
+    public record AMPP_FAMHP(
+            int id,
+            String ctiExtended,
+            String ampCode,
+            String deliveryModusCode,
+            String deliveryModusSpecificationCode,
+            String authorizationNumber,
+            boolean orphan,
+            String leafletLinkNl,
+            String leafletLinkFr,
+            String leafletLinkEng,
+            String leafletLinkGer,
+            String spcLinkNl,
+            String spcLinkFr,
+            String spcLinkEng,
+            String spcLinkGer,
+            String rmaPatientLinkNl,
+            String rmaPatientLinkFr,
+            String rmaPatientLinkEng,
+            String rmaPatientLinkGer,
+            String rmaProfessionalLinkNl,
+            String rmaProfessionalLinkFr,
+            String rmaProfessionalLinkEng,
+            String rmaProfessionalLinkGer,
+            boolean parallelCircuit,
+            String parallelDistributor,
+            String packMultiplier,
+            String packAmount,
+            String packAmountUnit,
+            String packDisplayValue,
+            String gtin,
+            String status,
+            String fmdProductCode,
+            boolean fmdInScope,
+            boolean antiTamperingDevicePresent,
+            String prescriptionNameNl,
+            String prescriptionNameFr,
+            String prescriptionNameGer,
+            String prescriptionNameEng,
+            String rmaKeyMessagesNl,
+            String rmaKeyMessagesFr,
+            String rmaKeyMessagesEng,
+            String rmaKeyMessagesGer,
+            Date validFrom,
+            Date validTo
+    ) {
+    }
+
+    public record AMPP_TO_ATC(
+            String ctiExtended,
+            int id,
+            String code, //ATC Code
+            String description
+    ) {
+    }
+
+    public record AMPC_BCPI(
+            int id,
+            String ampCode,
+            int sequenceNumber,
+            int vmpcCode,
+            String dividable,
+            String scored,
+            String crushable,
+            String containsAlcohol,
+            boolean sugarFree,
+            String modifiedReleaseType,
+            int specificDrugDevice,
+            String dimensions,
+            String nameNl,
+            String nameFr,
+            String nameEng,
+            String nameGer,
+            String noteNl,
+            String noteFr,
+            String noteEng,
+            String noteGer,
+            String concentration,
+            String osmoticConcentration,
+            String caloricValue,
+            Date validFrom,
+            Date validTo
+    ) {
+    }
+    // AMPC_TO_ROA + STDROA, CMRCL, SPPROB
+
 }
