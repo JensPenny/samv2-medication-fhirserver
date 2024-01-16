@@ -17,19 +17,19 @@ public final class AmpRepository {
     @NotNull
     private final DbProvider provider;
 
-    //A selection of basic statements needed to fill a Medicinal Product Definition
-    private final List<String> ampcodeStatements = Arrays.asList(
-            "select * from AMP_FAMHP ampf where ampf.validTo is null and ampf.code = ?",        //? = amp-code
-            "select * from AMPP_FAMHP amppf where amppf.ampCode = ? and amppf.validTo is null", //? = amp-code
-            "select ampp_atc.ctiExtended, ATC.* from AMPP_TO_ATC ampp_atc " +
-                    "JOIN ATC on ATC.code = ampp_atc.code where ampp_atc.ctiExtended = ? and ampp_atc.validTo is null", //? = cti-extended
-            "select * from AMPC_BCPI ampcb where ampcb.ampCode = ? and ampcb.validTo is null",     //? = amp-code
-            "select amp_route.ampCode, roa.* from AMPC_TO_ROA amp_route " +
-                    "JOIN STDROA roa on roa.standard = 'SNOMED_CT' and roa.roaCode = amp_route.roaCode" +
-                    "where amp_route.ampCode = ? and amp_route.validTo is null",    //? = amp-code
-            "select * from CMRCL comm where comm.ctiExtended = ? and ifnull(comm.validTo, date('now')) >= date('now')",
-            "select * from SPPROB sp where sp.ctiExtended = ? and ifnull(sp.validTo, date('now')) >= date('now')"
-    );
+
+    //Generic basic queries to fetch information to fill in data models
+    private static final String ampFahmpStatement = "select * from AMP_FAMHP ampf where ampf.validTo is null and ampf.code = ?";
+    private static final String amppFamhpStatement = "select * from AMPP_FAMHP amppf where amppf.ampCode = ? and amppf.validTo is null";
+    private static final String atcStatement = "select ampp_atc.ctiExtended, ATC.* from AMPP_TO_ATC ampp_atc " +
+            "JOIN ATC on ATC.code = ampp_atc.code where ampp_atc.ctiExtended = ? and ampp_atc.validTo is null";
+    private static final String ampcBcpiStatement = "select * from AMPC_BCPI ampcb where ampcb.ampCode = ? and ampcb.validTo is null";
+    private static final String routeStatement =             "select amp_route.ampCode, roa.*, r.nameNl, r.nameFr, r.nameGer, r.nameEng from AMPC_TO_ROA amp_route " +
+            "JOIN STDROA roa on roa.standard = 'SNOMED_CT' and roa.roaCode = amp_route.roaCode" +
+            "JOIN ROA r on r.code = roa.roaCode " +
+            "WHERE amp_route.validTo is null --and amp_route.ampCode = ?";
+    private static final String cmrclStatement = "select * from CMRCL comm where comm.ctiExtended = ? and ifnull(comm.validTo, date('now')) >= date('now')";
+    private static final String spprobStatement = "select * from SPPROB sp where sp.ctiExtended = ? and ifnull(sp.validTo, date('now')) >= date('now')";
 
     //Specialized queries to fetch the initial data required for the top calls
     private static final String ampByName = "Select * from AMP_FAMHP where officialName like ? and ifnull(validTo, date('now')) >= date('now')";
@@ -186,6 +186,73 @@ public final class AmpRepository {
         );
     }
 
+    @NotNull
+    private static AMPC_TO_ROA roaFromResult(ResultSet result) throws SQLException {
+        return new AMPC_TO_ROA(
+                result.getString("ampCode"),
+                result.getInt("id"),
+                result.getString("standard"),
+                result.getString("code"),
+                result.getInt("roaCode"),
+                result.getString("nameNl"),
+                result.getString("nameFr"),
+                result.getString("nameGer"),
+                result.getString("nameEng")
+        );
+    }
+
+    @NotNull
+    private static CMRCL cmrclFromResult(ResultSet result) throws SQLException {
+        return new CMRCL(
+                result.getInt("id"),
+                result.getString("ctiExtended"),
+                result.getString("endOfCommercializationNl"),
+                result.getString("endOfCommercializationFr"),
+                result.getString("endOfCommercializationGer"),
+                result.getString("endOfCommercializationEng"),
+                result.getString("reasonEndOfCommercializationNl"),
+                result.getString("reasonEndOfCommercializationFr"),
+                result.getString("reasonEndOfCommercializationGer"),
+                result.getString("reasonEndOfCommercializationEng"),
+                result.getString("additionalInformationNl"),
+                result.getString("additionalInformationFr"),
+                result.getString("additionalInformationGer"),
+                result.getString("additionalInformationEng"),
+                result.getDate("validFrom"),
+                result.getDate("validTo")
+        );
+    }
+
+    @NotNull
+    private static SPPROB spprobFromResult(ResultSet resultSet) throws SQLException {
+        return new SPPROB(
+                resultSet.getInt("id"),
+                resultSet.getString("ctiExtended"),
+                resultSet.getDate("expectedEndDate"),
+                resultSet.getString("reportedBy"),
+                resultSet.getString("reportedOn"),
+                resultSet.getString("contactName"),
+                resultSet.getString("contactMail"),
+                resultSet.getString("contactCompany"),
+                resultSet.getString("contactPhone"),
+                resultSet.getString("reasonNl"),
+                resultSet.getString("reasonFr"),
+                resultSet.getString("reasonGer"),
+                resultSet.getString("reasonEng"),
+                resultSet.getString("additionalInformationNl"),
+                resultSet.getString("additionalInformationFr"),
+                resultSet.getString("additionalInformationGer"),
+                resultSet.getString("additionalInformationEng"),
+                resultSet.getString("impactNl"),
+                resultSet.getString("impactFr"),
+                resultSet.getString("impactGer"),
+                resultSet.getString("impactEng"),
+                resultSet.getBoolean("limitedAvailability"),
+                resultSet.getDate("validFrom"),
+                resultSet.getDate("validTo")
+        );
+    }
+
     public record AMP_FAHMP(
             int id,
             String ampCode,
@@ -292,6 +359,65 @@ public final class AmpRepository {
             Date validTo
     ) {
     }
-    // AMPC_TO_ROA + STDROA, CMRCL, SPPROB
 
+    public record AMPC_TO_ROA(
+            String ampCode,
+            int id,
+            String standard,
+            String code,
+            int roaCode,
+            String nameNl,
+            String nameFr,
+            String nameGer,
+            String nameEng
+    ) {
+    }
+
+    public record CMRCL(
+            int id,
+            String ctiExtended,
+            String endOfCommercializationNl,
+            String endOfCommercializationFr,
+            String endOfCommercializationGer,
+            String endOfCommercializationEng,
+            String reasonEndOfCommercializationNl,
+            String reasonEndOfCommercializationFr,
+            String reasonEndOfCommercializationGer,
+            String reasonEndOfCommercializationEng,
+            String additionalInformationNl,
+            String additionalInformationFr,
+            String additionalInformationGer,
+            String additionalInformationEng,
+            Date validFrom,
+            Date validTo
+    ) {
+    }
+
+    public record SPPROB(
+            int id,
+            String ctiExtended,
+            Date expectedEndDate,
+            String reportedBy,
+            String reportedOn,
+            String contactName,
+            String contactMail,
+            String contactCompany,
+            String contactPhone,
+            String reasonNl,
+            String reasonFr,
+            String reasonGer,
+            String reasonEng,
+            String additionalInformationNl,
+            String additionalInformationFr,
+            String additionalInformationGer,
+            String additionalInformationEng,
+            String impactNl,
+            String impactFr,
+            String impactGer,
+            String impactEng,
+            boolean limitedAvailability,
+            Date validFrom,
+            Date validTo
+    ) {
+    }
 }
