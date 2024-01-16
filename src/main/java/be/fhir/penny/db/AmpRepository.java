@@ -2,11 +2,11 @@ package be.fhir.penny.db;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.Date;
 
 /**
  * todo: log timings
@@ -14,6 +14,8 @@ import java.util.*;
  */
 public final class AmpRepository {
 
+    //We don't make these static normally, but for now this is faster to get an actual poc up
+    private static final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd");
     @NotNull
     private final DbProvider provider;
 
@@ -24,7 +26,7 @@ public final class AmpRepository {
     private static final String atcStatement = "select ampp_atc.ctiExtended, ATC.* from AMPP_TO_ATC ampp_atc " +
             "JOIN ATC on ATC.code = ampp_atc.code where ampp_atc.ctiExtended = ? and ampp_atc.validTo is null";
     private static final String ampcBcpiStatement = "select * from AMPC_BCPI ampcb where ampcb.ampCode = ? and ampcb.validTo is null";
-    private static final String routeStatement =             "select amp_route.ampCode, roa.*, r.nameNl, r.nameFr, r.nameGer, r.nameEng from AMPC_TO_ROA amp_route " +
+    private static final String routeStatement = "select amp_route.ampCode, roa.*, r.nameNl, r.nameFr, r.nameGer, r.nameEng from AMPC_TO_ROA amp_route " +
             "JOIN STDROA roa on roa.standard = 'SNOMED_CT' and roa.roaCode = amp_route.roaCode" +
             "JOIN ROA r on r.code = roa.roaCode " +
             "WHERE amp_route.validTo is null --and amp_route.ampCode = ?";
@@ -38,6 +40,33 @@ public final class AmpRepository {
         this.provider = provider;
     }
 
+    public Collection<AmpInfoContainer> getAmpInfo(@NotNull final String ampCode) {
+        try (Connection connection = provider.getConnection()) {
+            PreparedStatement statement = connection.prepareStatement(ampFahmpStatement);
+            statement.setString(1, ampCode);
+            ResultSet resultSet = statement.executeQuery();
+            while(resultSet.next()) {
+                AMP_FAHMP ampFahmp = ampFromResult(resultSet);
+                System.out.println(ampFahmp);
+            }
+
+            Collection<AMPP_FAMHP> amppFamhps = new ArrayList<>();
+            statement = connection.prepareStatement(amppFamhpStatement);
+            statement.setString(1, ampCode);
+            resultSet = statement.executeQuery();
+            while (resultSet.next()) {
+                AMPP_FAMHP amppFamhp = amppFromResult(resultSet); //Can be multiple
+                System.out.println(amppFamhp);
+                amppFamhps.add(amppFamhp);
+            }
+
+        } catch (SQLException | ParseException e) {
+            throw new RuntimeException(e);
+        }
+
+        return Collections.emptyList();
+    }
+
     public Collection<AMP_FAHMP> getAmpsByName(@NotNull final String name) {
         Collection<AMP_FAHMP> ampsByName = new ArrayList<>();
         try (PreparedStatement statement = provider.getConnection().prepareStatement(ampByName)) {
@@ -48,7 +77,7 @@ public final class AmpRepository {
                 AMP_FAHMP amp = ampFromResult(result);
                 ampsByName.add(amp);
             }
-        } catch (SQLException e) {
+        } catch (SQLException | ParseException e) {
             throw new RuntimeException(e);
         }
         return ampsByName;
@@ -64,7 +93,7 @@ public final class AmpRepository {
                 AMP_FAHMP amp = ampFromResult(result);
                 return Optional.of(amp);
             }
-        } catch (SQLException e) {
+        } catch (SQLException | ParseException e) {
             throw new RuntimeException(e);
         }
 
@@ -72,7 +101,9 @@ public final class AmpRepository {
     }
 
     @NotNull
-    private static AMP_FAHMP ampFromResult(ResultSet result) throws SQLException {
+    private static AMP_FAHMP ampFromResult(ResultSet result) throws SQLException, ParseException {
+        String from = result.getString("validFrom");
+        String to = result.getString("validTo");
         return new AMP_FAHMP(
                 result.getInt("id"),
                 result.getString("code"),
@@ -89,14 +120,17 @@ public final class AmpRepository {
                 result.getString("prescriptionNameGer"),
                 result.getString("prescriptionNameNl"),
                 result.getString("status"),
-                result.getDate("validFrom"),
-                result.getDate("validTo"),
+                from == null ? null : df.parse(from),
+                to == null ? null : df.parse(to),
                 result.getInt("vmpCode")
         );
     }
 
     @NotNull
-    private static AMPP_FAMHP amppFromResult(ResultSet result) throws SQLException {
+    private static AMPP_FAMHP amppFromResult(ResultSet result) throws SQLException, ParseException {
+        String from = result.getString("validFrom");
+        String to = result.getString("validTo");
+
         return new AMPP_FAMHP(
                 result.getInt("id"),
                 result.getString("ctiExtended"),
@@ -140,8 +174,8 @@ public final class AmpRepository {
                 result.getString("rmaKeyMessagesFr"),
                 result.getString("rmaKeyMessagesEng"),
                 result.getString("rmaKeyMessagesGer"),
-                result.getDate("validFrom"),
-                result.getDate("validTo")
+                from == null ? null : df.parse(from),
+                to == null ? null : df.parse(to)
         );
     }
 
@@ -418,6 +452,17 @@ public final class AmpRepository {
             boolean limitedAvailability,
             Date validFrom,
             Date validTo
+    ) {
+    }
+
+    public record AmpInfoContainer(
+            AMP_FAHMP amp,
+            Collection<AMPP_FAMHP> ampps,
+            Collection<AMPP_TO_ATC> atcs,
+            Collection<AMPC_BCPI> ampcs,
+            Collection<AMPC_TO_ROA> roas,
+            Collection<CMRCL> cmrcls,
+            Collection<SPPROB> spprobs
     ) {
     }
 }

@@ -1,7 +1,6 @@
 package be.fhir.penny.provider;
 
 import be.fhir.penny.db.AmpRepository;
-import be.fhir.penny.db.AmppRepository;
 import be.fhir.penny.model.Samv2MedicinalProductDefinition;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.Read;
@@ -25,12 +24,9 @@ import java.util.stream.Collectors;
 public class MedicinalProductDefinitionProvider implements IResourceProvider {
 
     private final AmpRepository ampRepository;
-    private final AmppRepository amppRepository;
 
-    public MedicinalProductDefinitionProvider(@NotNull final AmpRepository ampRepository,
-                                              @NotNull final AmppRepository amppRepository) {
+    public MedicinalProductDefinitionProvider(@NotNull final AmpRepository ampRepository) {
         this.ampRepository = ampRepository;
-        this.amppRepository = amppRepository;
     }
 
     @Override
@@ -79,7 +75,6 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
     private Function<AmpRepository.AMP_FAHMP, Samv2MedicinalProductDefinition> ampToFhirMedProduct() {
         return amp -> {
             //Fetch all companion objects needed to fill this definition. Later we'll optimize to do 1 query
-            Collection<AmppRepository.AMPP_FAHMP> ampps = amppRepository.getAmppsByAmp(amp.ampCode());
 
             Samv2MedicinalProductDefinition def = new Samv2MedicinalProductDefinition();
             def.setId(amp.ampCode());

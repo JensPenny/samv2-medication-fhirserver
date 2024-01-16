@@ -7,4 +7,4 @@ bin/
 .idea/
 
 # fixed sqlite DB packaged for testing as resource
-/testdb/6836/opt/samtosql/
+/testdb/8058/opt/samtosql/
