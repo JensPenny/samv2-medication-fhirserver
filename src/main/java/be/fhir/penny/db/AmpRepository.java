@@ -7,6 +7,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Date;
+import java.util.stream.Collectors;
 
 /**
  * todo: log timings
@@ -26,10 +27,11 @@ public final class AmpRepository {
     private static final String atcStatement = "select ampp_atc.ctiExtended, ATC.* from AMPP_TO_ATC ampp_atc " +
             "JOIN ATC on ATC.code = ampp_atc.code where ampp_atc.ctiExtended = ? and ampp_atc.validTo is null";
     private static final String ampcBcpiStatement = "select * from AMPC_BCPI ampcb where ampcb.ampCode = ? and ampcb.validTo is null";
-    private static final String routeStatement = "select amp_route.ampCode, roa.*, r.nameNl, r.nameFr, r.nameGer, r.nameEng from AMPC_TO_ROA amp_route " +
-            "JOIN STDROA roa on roa.standard = 'SNOMED_CT' and roa.roaCode = amp_route.roaCode" +
-            "JOIN ROA r on r.code = roa.roaCode " +
-            "WHERE amp_route.validTo is null --and amp_route.ampCode = ?";
+    private static final String roaStatement = """
+            select amp_route.ampCode, roa.*, r.nameNl, r.nameFr, r.nameGer, r.nameEng from AMPC_TO_ROA amp_route
+            JOIN STDROA roa on roa.standard = 'SNOMED_CT' and roa.roaCode = amp_route.roaCode
+            JOIN ROA r on r.code = roa.roaCode
+            WHERE amp_route.validTo is null and amp_route.ampCode = ?""";
     private static final String cmrclStatement = "select * from CMRCL comm where comm.ctiExtended = ? and ifnull(comm.validTo, date('now')) >= date('now')";
     private static final String spprobStatement = "select * from SPPROB sp where sp.ctiExtended = ? and ifnull(sp.validTo, date('now')) >= date('now')";
 
@@ -40,6 +42,14 @@ public final class AmpRepository {
         this.provider = provider;
     }
 
+    /** For the people reading this and shuddering about the amount of separate queries: the db-rules are a bit different
+     * for SQLite. As long as it's just a file and just this process that reads from it, this should be akin to reading from a
+     * local cache, only in SQL.
+     * And otherwise I'll notice this in the timings.
+     *
+     * @param ampCode the ampCode that is used to fetch all information
+     * @return a selection of gathered information that can be used to transform into a medicinalProductDefinition
+     */
     public Collection<AmpInfoContainer> getAmpInfo(@NotNull final String ampCode) {
         try (Connection connection = provider.getConnection()) {
             PreparedStatement statement = connection.prepareStatement(ampFahmpStatement);
@@ -50,15 +60,62 @@ public final class AmpRepository {
                 System.out.println(ampFahmp);
             }
 
+            Collection<AMPC_BCPI> ampcBcpis = new ArrayList<>();
+            statement = connection.prepareStatement(ampcBcpiStatement);
+            statement.setString(1, ampCode);
+            resultSet = statement.executeQuery();
+            while (resultSet.next()) {
+                AMPC_BCPI ampcBcpi = ampcFromResult(resultSet);
+                System.out.println(ampcBcpi);
+                ampcBcpis.add(ampcBcpi);
+            }
+
+            Collection<AMPC_TO_ROA> roas = new ArrayList<>();
+            statement = connection.prepareStatement(roaStatement);
+            statement.setString(1, ampCode);
+            resultSet = statement.executeQuery();
+            while (resultSet.next()) {
+                AMPC_TO_ROA roa = roaFromResult(resultSet);
+                System.out.println(roa);
+                roas.add(roa);
+            }
+
             Collection<AMPP_FAMHP> amppFamhps = new ArrayList<>();
             statement = connection.prepareStatement(amppFamhpStatement);
             statement.setString(1, ampCode);
             resultSet = statement.executeQuery();
             while (resultSet.next()) {
-                AMPP_FAMHP amppFamhp = amppFromResult(resultSet); //Can be multiple
+                AMPP_FAMHP amppFamhp = amppFromResult(resultSet);
                 System.out.println(amppFamhp);
                 amppFamhps.add(amppFamhp);
             }
+
+
+            //We use CTI Extended for some subqueries
+            Collection<String> ctiExtendeds = amppFamhps.stream().map(a -> a.ctiExtended).collect(Collectors.toSet());
+            Collection<AMPP_TO_ATC> atcs = new ArrayList<>();
+            for (String ctiExtended : ctiExtendeds) {
+                statement = connection.prepareStatement(atcStatement);
+                statement.setString(1, ctiExtended);
+                resultSet = statement.executeQuery();
+                while (resultSet.next()) {
+                    AMPP_TO_ATC atc = atcFromResult(resultSet);
+                    System.out.println(atc);
+                    atcs.add(atc);
+                }
+
+                statement = connection.prepareStatement(atcStatement);
+                statement.setString(1, ctiExtended);
+                resultSet = statement.executeQuery();
+                while (resultSet.next()) {
+                    AMPP_TO_ATC atc = atcFromResult(resultSet);
+                    System.out.println(atc);
+                    atcs.add(atc);
+                }
+                //We might add supplyproblems and commercialization-statusses, but maybe these fit better with the packages
+            }
+
+
 
         } catch (SQLException | ParseException e) {
             throw new RuntimeException(e);
@@ -190,7 +247,10 @@ public final class AmpRepository {
     }
 
     @NotNull
-    private static AMPC_BCPI ampcFromResult(ResultSet result) throws SQLException {
+    private static AMPC_BCPI ampcFromResult(ResultSet result) throws SQLException, ParseException {
+        String from = result.getString("validFrom");
+        String to = result.getString("validTo");
+
         return new AMPC_BCPI(
                 result.getInt("id"),
                 result.getString("ampCode"),
@@ -215,8 +275,8 @@ public final class AmpRepository {
                 result.getString("concentration"),
                 result.getString("osmoticConcentration"),
                 result.getString("caloricValue"),
-                result.getDate("validFrom"),
-                result.getDate("validTo")
+                from == null ? null : df.parse(from),
+                to == null ? null : df.parse(to)
         );
     }
 
@@ -236,7 +296,10 @@ public final class AmpRepository {
     }
 
     @NotNull
-    private static CMRCL cmrclFromResult(ResultSet result) throws SQLException {
+    private static CMRCL cmrclFromResult(ResultSet result) throws SQLException, ParseException {
+        String from = result.getString("validFrom");
+        String to = result.getString("validTo");
+
         return new CMRCL(
                 result.getInt("id"),
                 result.getString("ctiExtended"),
@@ -252,38 +315,41 @@ public final class AmpRepository {
                 result.getString("additionalInformationFr"),
                 result.getString("additionalInformationGer"),
                 result.getString("additionalInformationEng"),
-                result.getDate("validFrom"),
-                result.getDate("validTo")
+                from == null ? null : df.parse(from),
+                to == null ? null : df.parse(to)
         );
     }
 
     @NotNull
-    private static SPPROB spprobFromResult(ResultSet resultSet) throws SQLException {
+    private static SPPROB spprobFromResult(ResultSet result) throws SQLException, ParseException {
+        String from = result.getString("validFrom");
+        String to = result.getString("validTo");
+
         return new SPPROB(
-                resultSet.getInt("id"),
-                resultSet.getString("ctiExtended"),
-                resultSet.getDate("expectedEndDate"),
-                resultSet.getString("reportedBy"),
-                resultSet.getString("reportedOn"),
-                resultSet.getString("contactName"),
-                resultSet.getString("contactMail"),
-                resultSet.getString("contactCompany"),
-                resultSet.getString("contactPhone"),
-                resultSet.getString("reasonNl"),
-                resultSet.getString("reasonFr"),
-                resultSet.getString("reasonGer"),
-                resultSet.getString("reasonEng"),
-                resultSet.getString("additionalInformationNl"),
-                resultSet.getString("additionalInformationFr"),
-                resultSet.getString("additionalInformationGer"),
-                resultSet.getString("additionalInformationEng"),
-                resultSet.getString("impactNl"),
-                resultSet.getString("impactFr"),
-                resultSet.getString("impactGer"),
-                resultSet.getString("impactEng"),
-                resultSet.getBoolean("limitedAvailability"),
-                resultSet.getDate("validFrom"),
-                resultSet.getDate("validTo")
+                result.getInt("id"),
+                result.getString("ctiExtended"),
+                result.getDate("expectedEndDate"),
+                result.getString("reportedBy"),
+                result.getString("reportedOn"),
+                result.getString("contactName"),
+                result.getString("contactMail"),
+                result.getString("contactCompany"),
+                result.getString("contactPhone"),
+                result.getString("reasonNl"),
+                result.getString("reasonFr"),
+                result.getString("reasonGer"),
+                result.getString("reasonEng"),
+                result.getString("additionalInformationNl"),
+                result.getString("additionalInformationFr"),
+                result.getString("additionalInformationGer"),
+                result.getString("additionalInformationEng"),
+                result.getString("impactNl"),
+                result.getString("impactFr"),
+                result.getString("impactGer"),
+                result.getString("impactEng"),
+                result.getBoolean("limitedAvailability"),
+                from == null ? null : df.parse(from),
+                to == null ? null : df.parse(to)
         );
     }
 
