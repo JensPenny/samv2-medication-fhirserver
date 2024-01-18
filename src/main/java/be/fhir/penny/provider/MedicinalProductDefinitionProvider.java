@@ -9,8 +9,8 @@ import ca.uhn.fhir.rest.annotation.Search;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.NotImplementedOperationException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
-import org.hl7.fhir.r4.model.IdType;
-import org.hl7.fhir.r4.model.StringType;
+import org.hl7.fhir.r5.model.IdType;
+import org.hl7.fhir.r5.model.StringType;
 import org.hl7.fhir.r5.model.CodeableConcept;
 import org.hl7.fhir.r5.model.Coding;
 import org.hl7.fhir.r5.model.MarketingStatus;
@@ -38,17 +38,22 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
      * The read operation.
      * Takes a single parameter, and returns a single resource
      *
-     * @param samId the sam id for the AMP level, plus optionally a version-id
+     * @param ampCode the sam id for the AMP level, plus optionally a version-id
      * @return the resource matching the parameter, or null if it does not exist
      */
     @Read
-    public Samv2MedicinalProductDefinition readMedicinalProductDefinition(@IdParam IdType samId) {
-        if (!samId.hasVersionIdPart()) {
-            Optional<AmpRepository.AMP_FAHMP> currentAmpById = ampRepository.getCurrentAmpById(samId.getIdPart());
-            if (currentAmpById.isEmpty()) {
-                throw new ResourceNotFoundException("Unknown current medicinal product definition: " + samId);
+    public Samv2MedicinalProductDefinition readMedicinalProductDefinition(@IdParam IdType ampCode) {
+        if (!ampCode.hasVersionIdPart()) {
+            Collection<AmpRepository.AmpInfoContainer> ampInfo = ampRepository.getAmpInfo(ampCode.getIdPart());
+            if (ampInfo.isEmpty()) {
+                throw new ResourceNotFoundException("Unknown current medicinal product definition: " + ampCode);
             }
-            return ampToFhirMedProduct().apply(currentAmpById.get());
+
+            if (ampInfo.size() > 1) {
+                throw new IllegalStateException("Multiple medicinal product definitions found for ampcode " + ampCode);
+            }
+
+            return ampToFhirMedProduct().apply(ampInfo.stream().findAny().get());
         } else {
             throw new NotImplementedOperationException("Versioned results for this operation are not implemented yet");
         }
@@ -63,19 +68,18 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
     @Search()
     public List<Samv2MedicinalProductDefinition> findMedicinalProductsByName(@RequiredParam(name = Samv2MedicinalProductDefinition.SP_NAME) StringType ampName) {
         Collection<AmpRepository.AMP_FAHMP> ampsByName = ampRepository.getAmpsByName(ampName.getValue());
-        List<Samv2MedicinalProductDefinition> definitions = ampsByName.stream()
-                .map(ampToFhirMedProduct())
-                .collect(Collectors.toList());
+        List<Samv2MedicinalProductDefinition> definitions = Collections.emptyList();//todo
 
         return definitions;
         //throw new ResourceNotFoundException("Unknown medicinal product definition: " + ampName.toString());
     }
 
     @NotNull
-    private Function<AmpRepository.AMP_FAHMP, Samv2MedicinalProductDefinition> ampToFhirMedProduct() {
-        return amp -> {
+    private Function<AmpRepository.AmpInfoContainer, Samv2MedicinalProductDefinition> ampToFhirMedProduct() {
+        return ampInfo -> {
             //Fetch all companion objects needed to fill this definition. Later we'll optimize to do 1 query
 
+            AmpRepository.AMP_FAHMP amp = ampInfo.amp();
             Samv2MedicinalProductDefinition def = new Samv2MedicinalProductDefinition();
             def.setId(amp.ampCode());
             List<MedicinalProductDefinition.MedicinalProductDefinitionNameComponent> names = new ArrayList<>();
@@ -108,11 +112,26 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
             def.setStatus(statusFromDates.status);
             def.setStatusDate(statusFromDates.statusDate);
             //def.setCombinedPharmaceuticalDoseForm() //not implemented atm - possibly PHFRM
-            //def.addRoute() //not implemented atm
+
+            Collection<AmpRepository.AMPC_TO_ROA> routeOfAdministrations = ampInfo.roas();
+            Set<String> addedSnomedCodes = new HashSet<>();
+            for (AmpRepository.AMPC_TO_ROA route : routeOfAdministrations) {
+                if (Objects.equals(route.standard(), "SNOMED_CT") && !addedSnomedCodes.contains(route.code())) {
+                    def.addRoute(new CodeableConcept(new Coding("http://snomed.info/sct", route.code(), route.nameNl())));
+                    addedSnomedCodes.add(route.code());
+                }
+            }
             //def.addSpecialMeasures() //not needed
             //def.setPediatricUseIndicator() //not provided in samv2
-            def.addClassification(); //todo next up - fetch from ampps
 
+            Collection<AmpRepository.AMPP_TO_ATC> atcs = ampInfo.atcs();
+            Set<String> addedAtcCodes = new HashSet<>();
+            for (AmpRepository.AMPP_TO_ATC atc : atcs) {
+                if (!addedAtcCodes.contains(atc.code())) {
+                    def.addClassification(new CodeableConcept(new Coding("http://www.whocc.no/atc", atc.code(), atc.description())));
+                    addedAtcCodes.add(atc.code());
+                }
+            }
 
             //See discussion in 3.MedicinalProductDefinition-first-mapping-notes.md#status
             MarketingStatus marketingStatus = new MarketingStatus();
@@ -142,12 +161,12 @@ public class MedicinalProductDefinitionProvider implements IResourceProvider {
     private static Status createStatusFromDates(Date from, Date to) {
 
         Date now = new Date();
-        if (now.after(to)) {
+        if (to != null && now.after(to)) {
             //The resource lies in the past
             return new Status(new CodeableConcept(new Coding(statusSystem, "retired", "Retired")), to);
         }
 
-        if (now.before(from)) {
+        if (from == null || now.before(from)) {
             return new Status(new CodeableConcept(new Coding(statusSystem, "draft", "Draft")), from);
         }
 

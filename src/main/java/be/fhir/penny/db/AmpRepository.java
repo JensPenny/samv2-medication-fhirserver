@@ -5,8 +5,10 @@ import org.jetbrains.annotations.NotNull;
 import java.sql.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -42,7 +44,8 @@ public final class AmpRepository {
         this.provider = provider;
     }
 
-    /** For the people reading this and shuddering about the amount of separate queries: the db-rules are a bit different
+    /**
+     * For the people reading this and shuddering about the amount of separate queries: the db-rules are a bit different
      * for SQLite. As long as it's just a file and just this process that reads from it, this should be akin to reading from a
      * local cache, only in SQL.
      * And otherwise I'll notice this in the timings.
@@ -51,13 +54,19 @@ public final class AmpRepository {
      * @return a selection of gathered information that can be used to transform into a medicinalProductDefinition
      */
     public Collection<AmpInfoContainer> getAmpInfo(@NotNull final String ampCode) {
-        try (Connection connection = provider.getConnection()) {
+        Collection<AmpInfoContainer> infoContainers = new ArrayList<>();
+        Connection connection = provider.getConnection();
+        try {
             PreparedStatement statement = connection.prepareStatement(ampFahmpStatement);
             statement.setString(1, ampCode);
             ResultSet resultSet = statement.executeQuery();
-            while(resultSet.next()) {
-                AMP_FAHMP ampFahmp = ampFromResult(resultSet);
-                System.out.println(ampFahmp);
+            AMP_FAHMP ampFahmp = null;
+            while (resultSet.next()) {
+                if (ampFahmp != null) {
+                    throw new IllegalStateException("Multiple AmpFahmps found for ampcode " + ampCode);
+                }
+                ampFahmp = ampFromResult(resultSet);
+                //System.out.println(ampFahmp);
             }
 
             Collection<AMPC_BCPI> ampcBcpis = new ArrayList<>();
@@ -66,7 +75,7 @@ public final class AmpRepository {
             resultSet = statement.executeQuery();
             while (resultSet.next()) {
                 AMPC_BCPI ampcBcpi = ampcFromResult(resultSet);
-                System.out.println(ampcBcpi);
+                //System.out.println(ampcBcpi);
                 ampcBcpis.add(ampcBcpi);
             }
 
@@ -76,7 +85,7 @@ public final class AmpRepository {
             resultSet = statement.executeQuery();
             while (resultSet.next()) {
                 AMPC_TO_ROA roa = roaFromResult(resultSet);
-                System.out.println(roa);
+                //System.out.println(roa);
                 roas.add(roa);
             }
 
@@ -86,7 +95,7 @@ public final class AmpRepository {
             resultSet = statement.executeQuery();
             while (resultSet.next()) {
                 AMPP_FAMHP amppFamhp = amppFromResult(resultSet);
-                System.out.println(amppFamhp);
+                //System.out.println(amppFamhp);
                 amppFamhps.add(amppFamhp);
             }
 
@@ -100,7 +109,7 @@ public final class AmpRepository {
                 resultSet = statement.executeQuery();
                 while (resultSet.next()) {
                     AMPP_TO_ATC atc = atcFromResult(resultSet);
-                    System.out.println(atc);
+                    //System.out.println(atc);
                     atcs.add(atc);
                 }
 
@@ -109,19 +118,25 @@ public final class AmpRepository {
                 resultSet = statement.executeQuery();
                 while (resultSet.next()) {
                     AMPP_TO_ATC atc = atcFromResult(resultSet);
-                    System.out.println(atc);
+                    //System.out.println(atc);
                     atcs.add(atc);
                 }
                 //We might add supplyproblems and commercialization-statusses, but maybe these fit better with the packages
             }
 
-
-
-        } catch (SQLException | ParseException e) {
+            infoContainers.add(new AmpInfoContainer(
+                    ampFahmp,
+                    amppFamhps,
+                    atcs,
+                    ampcBcpis,
+                    roas
+            ));
+        } catch (SQLException |
+                 ParseException e) {
             throw new RuntimeException(e);
         }
 
-        return Collections.emptyList();
+        return infoContainers;
     }
 
     public Collection<AMP_FAHMP> getAmpsByName(@NotNull final String name) {
@@ -526,9 +541,9 @@ public final class AmpRepository {
             Collection<AMPP_FAMHP> ampps,
             Collection<AMPP_TO_ATC> atcs,
             Collection<AMPC_BCPI> ampcs,
-            Collection<AMPC_TO_ROA> roas,
-            Collection<CMRCL> cmrcls,
-            Collection<SPPROB> spprobs
+            Collection<AMPC_TO_ROA> roas
+            //Collection<CMRCL> cmrcls,
+            //Collection<SPPROB> spprobs
     ) {
     }
 }
